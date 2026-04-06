@@ -23,6 +23,22 @@ resource "aws_s3_bucket" "secure_bucket" {
   bucket = "secure-bucket-${random_id.suffix.hex}"
 }
 
+resource "aws_s3_bucket_server_side_encryption_configuration" "misconfigured_encryption" {
+  bucket = aws_s3_bucket.misconfigured_bucket.id
+  rule {
+
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "secure_encryption" {
+  bucket = aws_s3_bucket.secure_bucket.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
 resource "aws_s3_bucket_public_access_block" "s3_public_access" {
   bucket                  = aws_s3_bucket.misconfigured_bucket.id
   block_public_acls       = false
