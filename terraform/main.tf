@@ -23,13 +23,6 @@ resource "aws_s3_bucket" "secure_bucket" {
   bucket = "secure-bucket-${random_id.suffix.hex}"
 }
 
-resource "aws_s3_bucket_server_side_encryption_configuration" "misconfigured_encryption" {
-  bucket = aws_s3_bucket.misconfigured_bucket.id
-  rule {
-
-  }
-}
-
 resource "aws_s3_bucket_server_side_encryption_configuration" "secure_encryption" {
   bucket = aws_s3_bucket.secure_bucket.id
   rule {
@@ -53,4 +46,42 @@ resource "aws_s3_bucket_public_access_block" "s3_secure_access" {
   block_public_policy     = true
   ignore_public_acls      = true
   restrict_public_buckets = true
+}
+
+resource "aws_iam_policy" "misconfigured_iam_policy" {
+  name        = "misconfigured-iam-policy"
+  path        = "/"
+  description = "Misconfigured IAM Policy"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = [
+          "*",
+        ]
+        Effect   = "Allow"
+        Resource = "*"
+      },
+    ]
+  })
+}
+
+resource "aws_iam_policy" "secure_iam_policy" {
+  name        = "secure-iam-policy"
+  path        = "/"
+  description = "Secure IAM Policy"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = [
+          "s3:GetObject",
+        ]
+        Effect   = "Allow"
+        Resource = "arn:aws:s3:::secure-bucket-*"
+      },
+    ]
+  })
 }
