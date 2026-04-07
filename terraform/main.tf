@@ -31,6 +31,17 @@ resource "random_id" "suffix" {
   byte_length = 4
 }
 
+#####
+# VPC
+#####
+
+resource "aws_vpc" "default_vpc" {
+  cidr_block = "10.0.0.0/16"
+  tags = {
+    Name = "default-vpc"
+  }
+}
+
 ############
 # S3 Buckets
 ############
@@ -115,4 +126,36 @@ resource "aws_iam_policy" "secure_iam_policy" {
       },
     ]
   })
+}
+
+#################
+# Security Groups
+#################
+
+resource "aws_security_group" "misconfigured_sg" {
+  name        = "misconfigured-sg"
+  description = "Misconfigured Security Group"
+  vpc_id      = aws_vpc.default_vpc.id
+}
+
+resource "aws_vpc_security_group_ingress_rule" "misconfigured_ingress_rules" {
+  security_group_id = aws_security_group.misconfigured_sg.id
+  cidr_ipv4         = "0.0.0.0/0"
+  from_port         = 0
+  ip_protocol       = "tcp"
+  to_port           = 65535
+}
+
+resource "aws_security_group" "secure_sg" {
+  name        = "secure-sg"
+  description = "Secure Security Group"
+  vpc_id      = aws_vpc.default_vpc.id
+}
+
+resource "aws_vpc_security_group_ingress_rule" "secure_ingress_rules" {
+  security_group_id = aws_security_group.secure_sg.id
+  cidr_ipv4         = "0.0.0.0/0"
+  from_port         = 443
+  ip_protocol       = "tcp"
+  to_port           = 443
 }
