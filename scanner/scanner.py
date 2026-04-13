@@ -1,11 +1,14 @@
 import boto3
+import joblib
+import pandas as pd
+
+# Load trained model
+model = joblib.load('../models/model.pkl')
 
 # Create clients for each service
 s3_client = boto3.client('s3')
 iam_client = boto3.client('iam')
 ec2_client = boto3.client('ec2')
-
-import pandas as pd
 
 results = []
 
@@ -27,39 +30,49 @@ def scan_s3_buckets():
         # Extract the public access block settings from the response
         config = public_access['PublicAccessBlockConfiguration']
 
-        # Conditional check to classify bucket as compliant if all public access settings are enabled
-        if all ([
+        # Determine if bucket has public access enabled
+        is_public = 0 if all([
             config['BlockPublicAcls'],
             config['IgnorePublicAcls'],
             config['BlockPublicPolicy'],
             config['RestrictPublicBuckets']
-        ]):
-            
-            # Append compliant S3 bucket result to results list
-            results.append({
-                'resource_name': bucket_name['Name'],
-                'resource_type': 's3',
-                'is_public': 0,
+        ]) else 1
+
+        # Build features for model prediction    
+        features = pd.DataFrame([{
+                'is_public': is_public,
                 'has_wildcard': 0,
                 'open_ports': 0,
-                'label': 'compliant'
-                })
-            
-            print(f"{bucket_name['Name']} is compliant")
+                'resource_type_iam': 0,
+                'resource_type_s3': 1,
+                'resource_type_sg': 0
+        }])
+        
+        # Get model prediction
+        prediction = model.predict(features)[0]
 
+        # Assign risk rating and remediation based on prediction
+        if prediction == 1:
+            risk_rating = 'High'
+            remediation = 'Enable All S3 Block Public Access settings to prevent public exposure of bucket data'
         else:
+            risk_rating = 'Low'
+            remediation = 'No remediation required'
 
-            # Append misconfigured S3 bucket result to results list
-            results.append({
-                'resource_name': bucket_name['Name'],
-                'resource_type': 's3',
-                'is_public': 1,
-                'has_wildcard': 0,
-                'open_ports': 0,
-                'label': 'misconfigured'
-                })
-            
-            print(f"{bucket_name['Name']} is misconfigured")
+        # Append S3 bucket scan result to results list
+        results.append({
+            'resource_name': bucket_name['Name'],
+            'resource_type': 's3',
+            'is_public': is_public,
+            'has_wildcard': 0,
+            'open_ports': 0,
+            'risk_rating': risk_rating,
+            'remediation': remediation,
+            'label': 'misconfigured' if prediction == 1 else 'compliant'
+        })
+
+        # Print finding
+        print(f"{bucket_name['Name']} | Risk: {risk_rating} | {remediation}")    
 
 scan_s3_buckets()
 
@@ -84,34 +97,49 @@ def scan_iam_policies():
         # Extract the policy statements from the document
         statements = policy_version['PolicyVersion']['Document']['Statement']
         
-        # Check each statement for wildcard actions
+        # Determine if policy statement contains wildcard actions
         for statement in statements:
             if '*' in statement['Action']:
-
-                # Append misconfigured IAM policy result to results list
-                results.append({
-                'resource_name': policy['PolicyName'],
-                'resource_type': 'iam',
-                'is_public': 0,
-                'has_wildcard': 1,
-                'open_ports': 0,
-                'label': 'misconfigured'
-                })                
-
-                print(f"{policy['PolicyName']} is misconfigured")
-
+                has_wildcard = 1
             else:
+                has_wildcard = 0
+            
+            # Build features for model prediction    
+            features = pd.DataFrame([{
+                    'is_public': 0,
+                    'has_wildcard': has_wildcard,
+                    'open_ports': 0,
+                    'resource_type_iam': 1,
+                    'resource_type_s3': 0,
+                    'resource_type_sg': 0
+            }])         
 
-                # Append compliant IAM policy result to results list
-                results.append({
-                'resource_name': policy['PolicyName'],
-                'resource_type': 'iam',
-                'is_public': 0,
-                'has_wildcard': 0,
-                'open_ports': 0,
-                'label': 'compliant'
-                })  
-                print(f"{policy['PolicyName']} is compliant")
+            # Get model prediction
+            prediction = model.predict(features)[0]
+
+            # Assign risk rating and remediation based on prediction
+            if prediction == 1:
+                risk_rating = 'Critical'
+                remediation = 'Remove wildcard permissions in IAM policy'
+            else:
+                risk_rating = 'Low'
+                remediation = 'No remediation required'
+
+            # Append IAM policy scan result to results list
+            results.append({
+            'resource_name': policy['PolicyName'],
+            'resource_type': 'iam',
+            'is_public': 0,
+            'has_wildcard': has_wildcard,
+            'open_ports': 0,
+            'risk_rating': risk_rating,
+            'remediation': remediation,
+            'label': 'misconfigured' if prediction == 1 else 'compliant'
+            })
+            
+            # Print finding
+            print(f"{policy['PolicyName']} | Risk: {risk_rating} | {remediation}")  
+    
                   
 scan_iam_policies()
 
@@ -134,36 +162,51 @@ def scan_security_group():
         # Loop through each inbound rule for the security group
         for rule in security_group['IpPermissions']:
 
-            # Flag as misconfigured if all ports are open from any IP
+            # Determine if security group has unrestricted inbound access
             if (rule['FromPort'] == 0 and 
                 rule['ToPort'] == 65535 and 
                 any(r['CidrIp'] == '0.0.0.0/0' for r in rule['IpRanges'])):
 
-                # Append misconfigured security group result to results list
-                results.append({
-                'resource_name': security_group['GroupName'],
-                'resource_type': 'sg',
-                'is_public': 0,
-                'has_wildcard': 0,
-                'open_ports': 1,
-                'label': 'misconfigured'
-                })
-
-                print(f"{security_group['GroupName']} is misconfigured")
+                open_ports = 1
 
             else:
+                open_ports = 0
 
-                # Append compliant security group result to results list
-                results.append({
+            # Build features for model prediction    
+            features = pd.DataFrame([{
+                'is_public': 0,
+                'has_wildcard': 0,
+                'open_ports': open_ports,
+                'resource_type_iam': 0,
+                'resource_type_s3': 0,
+                'resource_type_sg': 1
+            }])
+
+            # Get model prediction
+            prediction = model.predict(features)[0]
+
+            # Assign risk rating and remediation based on prediction
+            if prediction == 1:
+                risk_rating = 'Medium'
+                remediation = 'Restrict inbound rules to only required ports and trusted IP ranges instead of allowing all traffic from 0.0.0.0/0'
+            else:
+                risk_rating = 'Low'
+                remediation = 'No remediation required'
+
+            # Append security group scan result to results list
+            results.append({
                 'resource_name': security_group['GroupName'],
                 'resource_type': 'sg',
                 'is_public': 0,
                 'has_wildcard': 0,
-                'open_ports': 0,
-                'label': 'compliant'
-                })
+                'open_ports': open_ports,
+                'risk_rating': risk_rating,
+                'remediation': remediation,
+                'label': 'misconfigured' if prediction == 1 else 'compliant'
+            })
 
-                print(f"{security_group['GroupName']} is compliant")
+            # Print finding
+            print(f"{security_group['GroupName']} | Risk: {risk_rating} | {remediation}") 
 
 scan_security_group()
 
