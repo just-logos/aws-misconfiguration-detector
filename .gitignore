@@ -211,3 +211,4 @@ __marimo__/
 *.tfstate.backup
 .terraform/
 *.tfvars
+*.db
