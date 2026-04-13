@@ -1,6 +1,8 @@
 import boto3
 import joblib
 import pandas as pd
+import sqlite3
+from datetime import datetime
 
 # Load trained model
 model = joblib.load('../models/model.pkl')
@@ -10,6 +12,28 @@ s3_client = boto3.client('s3')
 iam_client = boto3.client('iam')
 ec2_client = boto3.client('ec2')
 
+# Connect to SQLite database
+conn = sqlite3.connect('../data/scan_results.db')
+cursor = conn.cursor()
+
+# Create findings table if it doesn't exist
+cursor.execute('''
+    CREATE TABLE IF NOT EXISTS findings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp TEXT,
+        resource_name TEXT,
+        resource_type TEXT,
+        is_public INTEGER,
+        has_wildcard INTEGER,
+        open_ports INTEGER,
+        risk_rating TEXT,
+        remediation TEXT,
+        label TEXT
+    )
+''')
+conn.commit()
+
+# Initialize empty list to store scan results
 results = []
 
 ############
@@ -127,20 +151,19 @@ def scan_iam_policies():
 
             # Append IAM policy scan result to results list
             results.append({
-            'resource_name': policy['PolicyName'],
-            'resource_type': 'iam',
-            'is_public': 0,
-            'has_wildcard': has_wildcard,
-            'open_ports': 0,
-            'risk_rating': risk_rating,
-            'remediation': remediation,
-            'label': 'misconfigured' if prediction == 1 else 'compliant'
+                'resource_name': policy['PolicyName'],
+                'resource_type': 'iam',
+                'is_public': 0,
+                'has_wildcard': has_wildcard,
+                'open_ports': 0,
+                'risk_rating': risk_rating,
+                'remediation': remediation,
+                'label': 'misconfigured' if prediction == 1 else 'compliant'
             })
             
             # Print finding
             print(f"{policy['PolicyName']} | Risk: {risk_rating} | {remediation}")  
-    
-                  
+      
 scan_iam_policies()
 
 ########################
@@ -217,3 +240,26 @@ df = pd.DataFrame(results)
 df.to_csv('../data/scan_results.csv', index=False)
 
 print("\nScan complete. Results saved to data/scan_results.csv")
+
+# Insert each scan finding into the database with a timestamp
+for result in results:
+    cursor.execute('''
+        INSERT INTO findings (timestamp, resource_name, resource_type, is_public, has_wildcard, open_ports, risk_rating, remediation, label)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (
+        datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        result['resource_name'],
+        result['resource_type'],
+        result['is_public'],
+        result['has_wildcard'],
+        result['open_ports'],
+        result['risk_rating'],
+        result['remediation'],
+        result['label']
+    ))
+
+# Commit and close database connection
+conn.commit()
+conn.close()
+
+print("Findings logged to database.")
