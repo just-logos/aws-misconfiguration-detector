@@ -148,7 +148,7 @@ def scan_security_group():
                 'open_ports': 1,
                 'label': 'misconfigured'
                 })
-                
+
                 print(f"{security_group['GroupName']} is misconfigured")
 
             else:
@@ -166,3 +166,11 @@ def scan_security_group():
                 print(f"{security_group['GroupName']} is compliant")
 
 scan_security_group()
+
+# Convert results to a pandas DataFrame
+df = pd.DataFrame(results)
+
+# Save the DataFrame to a CSV file
+df.to_csv('../data/scan_results.csv', index=False)
+
+print("\nScan complete. Results saved to data/scan_results.csv")
