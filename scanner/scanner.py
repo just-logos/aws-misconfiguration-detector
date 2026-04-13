@@ -5,6 +5,10 @@ s3_client = boto3.client('s3')
 iam_client = boto3.client('iam')
 ec2_client = boto3.client('ec2')
 
+import pandas as pd
+
+results = []
+
 ############
 # S3 Scanner
 ############
@@ -30,8 +34,31 @@ def scan_s3_buckets():
             config['BlockPublicPolicy'],
             config['RestrictPublicBuckets']
         ]):
+            
+            # Append compliant S3 bucket result to results list
+            results.append({
+                'resource_name': bucket_name['Name'],
+                'resource_type': 's3',
+                'is_public': 0,
+                'has_wildcard': 0,
+                'open_ports': 0,
+                'label': 'compliant'
+                })
+            
             print(f"{bucket_name['Name']} is compliant")
+
         else:
+
+            # Append misconfigured S3 bucket result to results list
+            results.append({
+                'resource_name': bucket_name['Name'],
+                'resource_type': 's3',
+                'is_public': 1,
+                'has_wildcard': 0,
+                'open_ports': 0,
+                'label': 'misconfigured'
+                })
+            
             print(f"{bucket_name['Name']} is misconfigured")
 
 scan_s3_buckets()
@@ -60,8 +87,30 @@ def scan_iam_policies():
         # Check each statement for wildcard actions
         for statement in statements:
             if '*' in statement['Action']:
+
+                # Append misconfigured IAM policy result to results list
+                results.append({
+                'resource_name': policy['PolicyName'],
+                'resource_type': 'iam',
+                'is_public': 0,
+                'has_wildcard': 1,
+                'open_ports': 0,
+                'label': 'misconfigured'
+                })                
+
                 print(f"{policy['PolicyName']} is misconfigured")
+
             else:
+
+                # Append compliant IAM policy result to results list
+                results.append({
+                'resource_name': policy['PolicyName'],
+                'resource_type': 'iam',
+                'is_public': 0,
+                'has_wildcard': 0,
+                'open_ports': 0,
+                'label': 'compliant'
+                })  
                 print(f"{policy['PolicyName']} is compliant")
                   
 scan_iam_policies()
@@ -89,8 +138,31 @@ def scan_security_group():
             if (rule['FromPort'] == 0 and 
                 rule['ToPort'] == 65535 and 
                 any(r['CidrIp'] == '0.0.0.0/0' for r in rule['IpRanges'])):
+
+                # Append misconfigured security group result to results list
+                results.append({
+                'resource_name': security_group['GroupName'],
+                'resource_type': 'sg',
+                'is_public': 0,
+                'has_wildcard': 0,
+                'open_ports': 1,
+                'label': 'misconfigured'
+                })
+                
                 print(f"{security_group['GroupName']} is misconfigured")
+
             else:
+
+                # Append compliant security group result to results list
+                results.append({
+                'resource_name': security_group['GroupName'],
+                'resource_type': 'sg',
+                'is_public': 0,
+                'has_wildcard': 0,
+                'open_ports': 0,
+                'label': 'compliant'
+                })
+
                 print(f"{security_group['GroupName']} is compliant")
 
 scan_security_group()
