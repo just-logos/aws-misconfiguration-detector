@@ -17,8 +17,19 @@ st.subheader("Scan Findings Dashboard")
 # Load scan findings from database
 df = load_data()
 
+# Interactive query - filter findings by risk rating
+st.subheader("Filter Findings")
+selected_risks = st.multiselect(
+    "Select Risk Levels to Display",
+    options=df['risk_rating'].unique(),
+    default=df['risk_rating'].unique()
+)
+
+# Filter dataframe based on selection
+filtered_df = df[df['risk_rating'].isin(selected_risks)]
+
 # Display selected columns in findings table
-st.dataframe(df[['resource_name', 'resource_type', 'risk_rating', 'label', 'remediation']], use_container_width=True)
+st.dataframe(filtered_df[['resource_name', 'resource_type', 'risk_rating', 'label', 'remediation']], width='stretch')
 
 # Visualization 1
 # Bar chart of findings grouped by risk level
