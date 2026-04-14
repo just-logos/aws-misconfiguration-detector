@@ -91,6 +91,6 @@ for i in range(500):
 df = pd.DataFrame(results)
 
 # Save the DataFrame to a CSV file
-df.to_csv('data/scan_results.csv', index=False)
+df.to_csv('scan_results.csv', index=False)
 
 print("\nResults saved to /data/scan_results.csv")
