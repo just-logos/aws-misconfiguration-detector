@@ -7,8 +7,8 @@ import joblib
 # Load training dataset
 df = pd.read_csv('../data/scan_results.csv')
 
-# Drop resource_name column as it is not useful for model training
-df = df.drop(columns=['resource_name'])
+# Drop columns not used as features
+df = df.drop(columns=['resource_name', 'risk_rating', 'remediation'])
 
 # Convert label column to numerical value: compliant = 0, misconfigured = 1
 df['label'] = df['label'].map({'compliant': 0, 'misconfigured': 1})
