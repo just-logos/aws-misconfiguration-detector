@@ -8,7 +8,7 @@ import joblib
 df = pd.read_csv('../data/scan_results.csv')
 
 # Drop columns not used as features
-df = df.drop(columns=['resource_name', 'risk_rating', 'remediation'])
+df = df.drop(columns=['resource_name'])
 
 # Convert label column to numerical value: compliant = 0, misconfigured = 1
 df['label'] = df['label'].map({'compliant': 0, 'misconfigured': 1})
